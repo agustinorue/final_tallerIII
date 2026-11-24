@@ -7,7 +7,10 @@ Informe web estático sobre la estacionalidad, distribución espacial, trayector
 - Alcance metodológico y advertencias de interpretación.
 - Filtros por cuenca, año inicial y mes de génesis.
 - Mapa mundial con OpenStreetMap y Esri World Imagery.
+- Sidebar con tres vistas: mapa general, ciclones más fuertes y amenaza por ubicación.
 - Puntos de génesis, picos de intensidad y génesis de sistemas con intensificación rápida (RI).
+- Ranking filtrable por viento, presión, ACE, distancia, velocidad media y aumento de viento en 24 horas.
+- Animación completa de cada ciclón con fecha, estado, viento, presión, velocidad de desplazamiento y recorrido coloreado por intensidad.
 - Calendario mensual y tabla mensual.
 - Selección de sistemas desde el mapa y las tablas; al elegir una anomalía, el mapa encuadra su trayectoria.
 - Métricas descriptivas de trayectorias disponibles.
@@ -16,7 +19,7 @@ Informe web estático sobre la estacionalidad, distribución espacial, trayector
 - Capítulos narrativos en secuencia, con navegación fija y filtros compartidos.
 - Alternancia Tabla/Gráfico para tablas mensuales, casos extremos, anomalías y décadas.
 - Ranking descriptivo de formas de trayectoria, con resultados restringidos por los filtros activos.
-- Perfil histórico de amenaza por un punto elegido en el mapa costero: trayectorias cercanas, distancia mínima e intensidad máxima del ciclo.
+- Superficie continua de riesgo histórico por ciudad o punto elegido, recortada a tierra con Natural Earth; pondera con mayor fuerza la exposición costera, incluye un círculo fijo de 100 km y permite filtrar las observaciones por mes del año. Los ciclones cercanos se pueden seleccionar para reproducir su recorrido completo, coloreado por intensidad, sin perder el punto analizado.
 - Síntesis y limitaciones.
 
 Para explorar el informe localmente, abrí una terminal en esta carpeta y ejecutá `python -m http.server 8000`; luego ingresá a `http://localhost:8000`. Abrir el archivo con `file://` puede hacer que OpenStreetMap bloquee sus teselas por falta de un referente web. El mapa requiere conexión a Internet.
@@ -28,19 +31,21 @@ Fuente: NOAA/National Hurricane Center, HURDAT2.
 - Atlántico: 1851–2025.
 - Pacífico NE/NC: 1949–2025.
 - Unidad de análisis: cada ciclón.
-- Trayectorias disponibles: 1.109 de 3.250 sistemas; la cobertura es incompleta y no uniforme.
+- Trayectorias completas disponibles en la nueva navegación: 3.250 sistemas y 87.584 observaciones.
 - Intensificación rápida: aumento de al menos 30 kt en una ventana cercana a 24 horas.
 - Distancias y desplazamientos: estimación haversine.
-- Duración y velocidad aproximadas: se infieren con (número de posiciones − 1) intervalos de seis horas; el archivo compacto no conserva las horas de cada punto.
+- Duración y velocidad aproximadas: se calculan con la fecha y hora de cada observación.
 - Índice de anomalía: trayectorias resampleadas a 13 posiciones, alineadas por el primer avance y normalizadas por longitud. El puntaje compara la forma con una referencia global de las trayectorias disponibles; no mide rareza climatológica, intensidad ni riesgo.
 
-Las frecuencias históricas deben interpretarse con cautela porque la calidad y resolución observacional varían. El perfil por ubicación describe amenaza histórica, no vulnerabilidad, riesgo total ni pronóstico. El viento mostrado es el máximo del ciclo completo, no necesariamente el viento en el punto de paso.
+Las frecuencias históricas deben interpretarse con cautela porque la calidad y resolución observacional varían. El perfil por ubicación describe amenaza histórica, no vulnerabilidad, riesgo total ni pronóstico. En ese perfil, el viento se interpola sobre el segmento de trayectoria más cercano al punto elegido.
+
+Para regenerar `data/cyclone_tracks.json` desde los archivos HURDAT2 originales, ejecutá `node scripts/build_full_tracks.mjs`.
 
 ## Publicación en GitHub Pages
 
 El sitio no requiere compilación ni dependencias locales:
 
-1. Subí `index.html` y `README.md` a la rama que publica el sitio.
+1. Subí `index.html`, `app_pages.js`, `data/cyclone_tracks.json` y `README.md` a la rama que publica el sitio.
 2. En GitHub, abrí **Settings → Pages**.
 3. Seleccioná **Deploy from a branch**.
 4. Elegí la rama principal y la carpeta `/ (root)`.
