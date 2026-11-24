@@ -40,9 +40,21 @@
   let observationBins = null;
   let lastRiskRender = null;
   let riskMoveTimer = null;
+  let trajectoryClusterModel = null;
+  let corridorFocus = 'ALL';
+  let corridorRenderToken = 0;
+  let groupMap = null;
+  let groupTrackLayer = null;
+  let groupAnimationLayer = null;
+  let groupFocus = 'ALL';
+  let selectedGroupSystem = null;
+  let groupAnimationIndex = 0;
+  let groupAnimationTimer = null;
+  const corridorColors = ['#f2c14e', '#55d6be', '#f45b69', '#8eb7d8', '#c43cff', '#f78154'];
   const coastLandCache = new Map();
   const coastalWeightCache = new Map();
   const threatMonthNames = ['Todos los meses', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
 
   function addThreatControls() {
     if (document.getElementById('threatMonth')) return;
@@ -68,6 +80,47 @@
   }
 
   addThreatControls();
+
+  function addTrajectoryGroupingUI() {
+    const layerSelect = document.getElementById('layer');
+    if (!layerSelect || layerSelect.querySelector('option[value="clusters"]')) return;
+    const option = document.createElement('option');
+    option.value = 'clusters';
+    option.textContent = 'Grupos de trayectorias';
+    layerSelect.appendChild(option);
+    const panel = document.createElement('div');
+    panel.id = 'corridorPanel';
+    panel.className = 'corridorPanel';
+    panel.hidden = true;
+    panel.innerHTML = `<div class="corridorHead"><div><div class="eyebrow">Agrupaci&oacute;n autom&aacute;tica</div><h3>Seis grupos hist&oacute;ricos</h3><p>Los recorridos se comparan en siete momentos equivalentes y se agrupan por cercan&iacute;a geogr&aacute;fica. Las l&iacute;neas finas son casos reales; la l&iacute;nea gruesa representa el recorrido m&aacute;s central de cada grupo.</p></div><button type="button" class="btn" id="showAllCorridors">Mostrar todos</button></div><div class="corridorCards" id="corridorCards"><div class="loadingState">Calculando grupos de trayectorias&hellip;</div></div>`;
+    document.querySelector('#worldMap').closest('.panel').appendChild(panel);
+    const style = document.createElement('style');
+    style.textContent = '.corridorPanel{margin-top:16px;padding:16px;background:var(--panel2);border:1px solid var(--line);border-radius:16px}.corridorHead{display:flex;align-items:start;justify-content:space-between;gap:16px}.corridorHead h3{margin:2px 0}.corridorHead p{margin:4px 0 12px;color:var(--muted);font-size:.82rem;max-width:820px}.corridorCards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.corridorCard{display:grid;grid-template-columns:12px 1fr;gap:9px;text-align:left;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:10px;cursor:pointer}.corridorCard:hover,.corridorCard[aria-selected="true"]{border-color:var(--corridor-color);background:rgba(242,193,78,.08)}.corridorSwatch{width:11px;height:100%;min-height:42px;border-radius:99px;background:var(--corridor-color)}.corridorCard b,.corridorCard span{display:block}.corridorCard span{font-size:.75rem;color:var(--muted)}@media(max-width:900px){.corridorCards{grid-template-columns:1fr 1fr}}@media(max-width:560px){.corridorHead{display:block}.corridorCards{grid-template-columns:1fr}}';
+    document.head.appendChild(style);
+  }
+
+  addTrajectoryGroupingUI();
+
+  function addTrajectoryPageUI() {
+    if (document.getElementById('groupPage')) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.appTarget = 'groups';
+    button.setAttribute('aria-selected', 'false');
+    button.textContent = 'Grupos de trayectorias';
+    document.querySelector('[data-app-target="threat"]').before(button);
+    const page = document.createElement('section');
+    page.className = 'appPage';
+    page.id = 'groupPage';
+    page.setAttribute('aria-labelledby', 'groupTitle');
+    page.innerHTML = `<div class="pageHero"><div><div class="eyebrow">Patrones hist&oacute;ricos de movimiento</div><h1 id="groupTitle">Grupos de trayectorias</h1><p>Comparamos el recorrido completo de cada cicl&oacute;n y lo asignamos a uno de seis grupos geogr&aacute;ficos. Eleg&iacute; un grupo para aislarlo y ver su ruta real m&aacute;s representativa.</p></div></div><div class="pageControls"><div class="control"><label for="groupBasin">Cuenca</label><select id="groupBasin"><option value="ALL">Ambas</option><option value="ATL">Atl&aacute;ntico</option><option value="PAC">Pac&iacute;fico NE/NC</option></select></div><div class="control"><label for="groupStart">Desde</label><select id="groupStart"><option value="1851">1851</option><option value="1950">1950</option><option value="1966">1966 · era satelital</option><option value="1990">1990</option><option value="2010">2010</option></select></div><div class="control"><label for="groupMonth">Mes de g&eacute;nesis</label><select id="groupMonth">${threatMonthNames.map((name, month) => `<option value="${month}">${name}</option>`).join('')}</select></div><button type="button" class="btn active" id="showAllGroups">Mostrar los seis</button></div><div class="selectedSummary" id="groupSummary"><div class="metric"><b id="groupVisible">&mdash;</b><span>trayectorias visibles</span></div><div class="metric"><b id="groupLargest">&mdash;</b><span>grupo m&aacute;s frecuente</span></div><div class="metric"><b id="groupWind">&mdash;</b><span>viento m&aacute;ximo medio</span></div><div class="metric"><b>6</b><span>patrones calculados</span></div></div><div id="groupLoading" class="loadingState">Calculando los grupos hist&oacute;ricos&hellip;</div><div class="trajectoryPageLayout" id="groupContent" hidden><div class="panel"><div class="eyebrow">Mapa comparativo</div><h2 id="groupMapTitle">Los seis grupos</h2><p class="sub" id="groupMapSub">Cada color representa un patr&oacute;n. Las l&iacute;neas finas son ciclones reales y la gruesa es el caso m&aacute;s central del grupo.</p><div class="groupMap" id="groupMap" aria-label="Mapa de grupos de trayectorias hist&oacute;ricas"></div><div class="groupColorLegend" id="groupColorLegend"></div><div class="groupPlayback" id="groupPlayback" hidden><div id="groupPlaybackStatus">Eleg&iacute; un cicl&oacute;n para reproducirlo.</div><div class="animationBar"><button type="button" class="btn active" id="playGroupStorm">Reproducir</button><button type="button" class="btn" id="pauseGroupStorm">Pausar</button><button type="button" class="btn" id="restartGroupStorm">Reiniciar</button></div></div></div><div class="panel groupListPanel"><div class="eyebrow">Seleccionar grupo</div><h2>Tipos de recorrido</h2><p class="sub">La clasificaci&oacute;n surge de estos datos; no es una categor&iacute;a oficial meteorol&oacute;gica.</p><div class="groupCards" id="groupCards"></div><div class="groupCyclonePicker" id="groupCyclonePicker" hidden><div class="eyebrow">Ciclones del grupo</div><h3 id="groupCycloneTitle">Eleg&iacute; un cicl&oacute;n</h3><p class="sub">Ordenados por viento m&aacute;ximo. Toc&aacute; uno para reproducir su recorrido.</p><div class="groupCycloneList" id="groupCycloneList"></div></div></div></div>`;
+    document.getElementById('threatPage').before(page);
+    const style = document.createElement('style');
+    style.textContent = '.trajectoryPageLayout{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(320px,.45fr);gap:18px}.groupMap{height:min(70vh,760px);min-height:620px;border-radius:16px;overflow:hidden;background:#0d0715}.groupCards{display:grid;gap:10px}.groupCard{width:100%;display:grid;grid-template-columns:13px 1fr;gap:10px;text-align:left;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;cursor:pointer}.groupCard:hover,.groupCard[aria-selected="true"]{border-color:var(--group-color);box-shadow:inset 0 0 0 1px var(--group-color)}.groupCard i{display:block;width:12px;height:100%;min-height:50px;border-radius:99px;background:var(--group-color)}.groupCard b,.groupCard span{display:block}.groupCard span{font-size:.78rem;color:var(--muted);margin-top:3px}.groupColorLegend{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:12px;color:var(--muted);font-size:.78rem}.groupColorLegend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}.groupListPanel{align-self:start}.groupCyclonePicker{margin-top:18px;padding-top:18px;border-top:1px solid var(--line)}.groupCycloneList{display:grid;gap:7px;max-height:440px;overflow:auto}.groupCyclone{width:100%;display:grid;grid-template-columns:1fr auto;gap:8px;text-align:left;color:var(--text);background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:10px;padding:9px 10px;cursor:pointer}.groupCyclone:hover,.groupCyclone[aria-selected="true"]{border-color:var(--accent);background:rgba(242,193,78,.1)}.groupCyclone b,.groupCyclone span{display:block}.groupCyclone span{color:var(--muted);font-size:.74rem}.groupCyclone strong{color:var(--accent);white-space:nowrap}.groupPlayback{margin-top:14px;padding:12px;background:var(--panel2);border:1px solid var(--line);border-radius:12px}.groupPlayback #groupPlaybackStatus{min-height:42px;color:var(--muted);font-size:.84rem}.sidebarNav{grid-auto-rows:min-content}@media(max-width:1100px){.trajectoryPageLayout{grid-template-columns:1fr}.groupMap{height:600px;min-height:520px}.groupCards{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:800px){.sidebarNav{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(max-width:580px){.groupCards{grid-template-columns:1fr}.groupMap{height:500px;min-height:440px}}';
+    document.head.appendChild(style);
+  }
+
+  addTrajectoryPageUI();
 
   const loadFullData = () => {
     if (fullSystems) return Promise.resolve(fullSystems);
@@ -122,6 +175,9 @@
     if (page === 'strongest') {
       document.getElementById('strongestPage').classList.add('is-active');
       openStrongestPage();
+    } else if (page === 'groups') {
+      document.getElementById('groupPage').classList.add('is-active');
+      openGroupPage();
     } else if (page === 'threat') {
       document.getElementById('threatPage').classList.add('is-active');
       openThreatPage();
@@ -152,6 +208,353 @@
       Number(text.slice(0, 4)), Number(text.slice(4, 6)) - 1, Number(text.slice(6, 8)),
       Number(text.slice(8, 10)), Number(text.slice(10, 12))
     ));
+  }
+
+  function sampleTrajectoryFeature(system, sampleCount = 7) {
+    if (!system?.o?.length) return null;
+    const points = system.o
+      .map(row => [Number(row[1]), Number(row[2])])
+      .filter(point => Number.isFinite(point[0]) && Number.isFinite(point[1]));
+    if (points.length < 4) return null;
+    const unwrapped = [points[0].slice()];
+    for (let index = 1; index < points.length; index += 1) {
+      let longitude = points[index][0];
+      const previousLongitude = unwrapped[index - 1][0];
+      while (longitude - previousLongitude > 180) longitude -= 360;
+      while (longitude - previousLongitude < -180) longitude += 360;
+      unwrapped.push([longitude, points[index][1]]);
+    }
+    const feature = [];
+    for (let sample = 0; sample < sampleCount; sample += 1) {
+      const position = sample * (unwrapped.length - 1) / (sampleCount - 1);
+      const left = Math.floor(position);
+      const right = Math.min(unwrapped.length - 1, Math.ceil(position));
+      const mix = position - left;
+      feature.push(
+        unwrapped[left][0] + (unwrapped[right][0] - unwrapped[left][0]) * mix,
+        unwrapped[left][1] + (unwrapped[right][1] - unwrapped[left][1]) * mix
+      );
+    }
+    return feature;
+  }
+
+  function squaredDistance(left, right) {
+    return left.reduce((total, value, index) => total + (value - right[index]) ** 2, 0);
+  }
+
+  function buildTrajectoryClusterModel() {
+    if (trajectoryClusterModel || !fullSystems) return trajectoryClusterModel;
+    const entries = fullSystems
+      .map(system => ({ system, raw: sampleTrajectoryFeature(system) }))
+      .filter(entry => entry.raw);
+    const dimensions = entries[0].raw.length;
+    const means = Array.from({ length: dimensions }, (_, dimension) => entries.reduce((sum, entry) => sum + entry.raw[dimension], 0) / entries.length);
+    const deviations = means.map((mean, dimension) => Math.sqrt(entries.reduce((sum, entry) => sum + (entry.raw[dimension] - mean) ** 2, 0) / entries.length) || 1);
+    entries.forEach(entry => {
+      entry.feature = entry.raw.map((value, dimension) => Math.max(-3, Math.min(3, (value - means[dimension]) / deviations[dimension])));
+    });
+    const centers = ['ATL', 'PAC'].flatMap(basin => {
+      const basinEntries = entries.filter(entry => entry.system.b === basin).sort((left, right) => {
+        const movementScore = entry => {
+          const last = entry.raw.length - 2;
+          return (entry.raw[last + 1] - entry.raw[1]) + .35 * (entry.raw[last] - entry.raw[0]);
+        };
+        return movementScore(left) - movementScore(right);
+      });
+      return [1 / 6, 3 / 6, 5 / 6].map(quantile => basinEntries[Math.min(basinEntries.length - 1, Math.floor(basinEntries.length * quantile))].feature.slice());
+    });
+    let assignments = [];
+    for (let iteration = 0; iteration < 24; iteration += 1) {
+      assignments = entries.map(entry => centers.reduce((best, center, cluster) => {
+        const distance = squaredDistance(entry.feature, center);
+        return distance < best.distance ? { cluster, distance } : best;
+      }, { cluster: 0, distance: Infinity }).cluster);
+      centers.forEach((center, cluster) => {
+        const members = entries.filter((entry, index) => assignments[index] === cluster);
+        if (!members.length) return;
+        center.forEach((value, dimension) => {
+          center[dimension] = members.reduce((sum, entry) => sum + entry.feature[dimension], 0) / members.length;
+        });
+      });
+    }
+    const assignmentById = new Map();
+    const featureById = new Map();
+    entries.forEach((entry, index) => {
+      assignmentById.set(entry.system.i, assignments[index]);
+      featureById.set(entry.system.i, entry.feature);
+    });
+    trajectoryClusterModel = { centers, assignmentById, featureById };
+    return trajectoryClusterModel;
+  }
+
+  function corridorDescription(systems) {
+    const basinCounts = systems.reduce((counts, system) => ({ ...counts, [system.b]: (counts[system.b] || 0) + 1 }), {});
+    const basin = (basinCounts.ATL || 0) >= (basinCounts.PAC || 0) ? 'Atlántico' : 'Pacífico';
+    const displacements = systems.map(system => {
+      const feature = sampleTrajectoryFeature(system);
+      const last = feature.length - 2;
+      return [feature[last] - feature[0], feature[last + 1] - feature[1]];
+    });
+    const east = displacements.reduce((sum, displacement) => sum + displacement[0], 0) / displacements.length;
+    const north = displacements.reduce((sum, displacement) => sum + displacement[1], 0) / displacements.length;
+    let movement = null;
+    if (north > 14 && east > 8) movement = 'recurvatura al noreste';
+    else if (north > 16) movement = 'avance hacia el norte';
+    else if (east < -16) movement = 'avance hacia el oeste';
+    else if (east > 16) movement = 'avance hacia el este';
+    else if (north < -10) movement = 'avance hacia el sur';
+    if (!movement) {
+      const directionNames = ['este', 'noreste', 'norte', 'noroeste', 'oeste', 'sudoeste', 'sur', 'sudeste'];
+      const angle = (Math.atan2(north, east) * 180 / Math.PI + 360) % 360;
+      movement = `avance hacia el ${directionNames[Math.round(angle / 45) % 8]}`;
+    }
+    return `${basin} · ${movement}`;
+  }
+
+  function filteredCorridorSystems() {
+    const basin = document.getElementById('v3basin').value;
+    const start = Number(document.getElementById('v3start').value);
+    const month = Number(document.getElementById('month').value);
+    return fullSystems.filter(system => {
+      const genesisMonth = parseObservationDate(system.o[0][0]).getUTCMonth() + 1;
+      return (basin === 'ALL' || system.b === basin) && system.y >= start && (!month || genesisMonth === month);
+    });
+  }
+
+  function restoreMainMapLegend() {
+    document.querySelectorAll('.mapLegend span').forEach(span => { span.hidden = false; });
+  }
+
+  function setCorridorMode(enabled) {
+    document.getElementById('corridorPanel').hidden = !enabled;
+    if (!enabled) {
+      corridorRenderToken += 1;
+      restoreMainMapLegend();
+    }
+  }
+
+  function splitTrack(system) {
+    const parts = [[]];
+    let previousLongitude = null;
+    system.o.forEach(row => {
+      const longitude = Number(row[1]);
+      const latitude = Number(row[2]);
+      if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return;
+      if (previousLongitude != null && Math.abs(longitude - previousLongitude) > 180) parts.push([]);
+      parts[parts.length - 1].push([latitude, longitude]);
+      previousLongitude = longitude;
+    });
+    return parts.filter(part => part.length > 1);
+  }
+
+  async function renderTrajectoryCorridors({ fitFocus = false } = {}) {
+    if (document.getElementById('layer').value !== 'clusters') return;
+    const token = ++corridorRenderToken;
+    setCorridorMode(true);
+    try {
+      await loadFullData();
+      if (token !== corridorRenderToken || document.getElementById('layer').value !== 'clusters') return;
+      const model = buildTrajectoryClusterModel();
+      const eligible = filteredCorridorSystems().filter(system => model.assignmentById.has(system.i));
+      const groups = Array.from({ length: 6 }, (_, cluster) => eligible.filter(system => model.assignmentById.get(system.i) === cluster));
+      pointCanvas.setData([], 'genesis');
+      trackLayer.clearLayers();
+      const visibleGroups = corridorFocus === 'ALL' ? groups : groups.map((group, cluster) => cluster === Number(corridorFocus) ? group : []);
+      const visible = visibleGroups.flat();
+      const sampleStep = Math.max(1, Math.ceil(visible.length / 720));
+      visible.forEach((system, index) => {
+        if (index % sampleStep) return;
+        const cluster = model.assignmentById.get(system.i);
+        splitTrack(system).forEach(part => L.polyline(part, { color: corridorColors[cluster], weight: 1.25, opacity: .18, interactive: false }).addTo(trackLayer));
+      });
+      visibleGroups.forEach((group, cluster) => {
+        if (!group.length) return;
+        const representative = group.reduce((best, system) => {
+          const distance = squaredDistance(model.featureById.get(system.i), model.centers[cluster]);
+          return distance < best.distance ? { system, distance } : best;
+        }, { system: group[0], distance: Infinity }).system;
+        splitTrack(representative).forEach(part => L.polyline(part, { color: corridorColors[cluster], weight: 5, opacity: .96 })
+          .bindPopup(`<b>Corredor ${cluster + 1} · ${corridorDescription(group)}</b><br>Recorrido representativo: ${representative.n} · ${representative.y}<br>${group.length} ciclones visibles`)
+          .addTo(trackLayer));
+      });
+      const cards = groups.map((systems, cluster) => ({ systems, cluster })).filter(group => group.systems.length).sort((left, right) => left.cluster - right.cluster);
+      document.getElementById('corridorCards').innerHTML = cards.map(({ systems, cluster }) => {
+        const share = eligible.length ? Math.round(systems.length * 100 / eligible.length) : 0;
+        const meanWind = Math.round(systems.reduce((sum, system) => sum + system.w, 0) / systems.length);
+        return `<button type="button" class="corridorCard" data-corridor="${cluster}" aria-selected="${String(Number(corridorFocus) === cluster)}" style="--corridor-color:${corridorColors[cluster]}"><i class="corridorSwatch"></i><span><b>Corredor ${cluster + 1} · ${corridorDescription(systems)}</b><span>${numberFormat.format(systems.length)} ciclones · ${share}% · viento máximo medio ${meanWind} kt</span></span></button>`;
+      }).join('') || '<div class="emptyState">No hay trayectorias completas para este recorte.</div>';
+      document.querySelectorAll('[data-corridor]').forEach(button => button.addEventListener('click', () => {
+        corridorFocus = Number(button.dataset.corridor);
+        renderTrajectoryCorridors({ fitFocus: true });
+      }));
+      const legendItems = document.querySelectorAll('.mapLegend span');
+      legendItems.forEach((span, index) => { span.hidden = index > 0; });
+      legendItems[0].textContent = `${numberFormat.format(visible.length)} trayectorias visibles · ${corridorFocus === 'ALL' ? '6 grupos' : `Corredor ${Number(corridorFocus) + 1} · ${corridorDescription(visible)}`}`;
+      if (fitFocus && visible.length) {
+        const bounds = L.latLngBounds(visible.flatMap(system => splitTrack(system).flat()));
+        if (bounds.isValid()) worldMap.fitBounds(bounds, { padding: [28, 28], maxZoom: 4, animate: true });
+      }
+    } catch (error) {
+      document.getElementById('corridorCards').innerHTML = `<div class="emptyState">${error.message}</div>`;
+    }
+  }
+
+  function initializeGroupMap() {
+    if (groupMap) return;
+    const street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+    });
+    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 18, attribution: 'Tiles &copy; Esri'
+    });
+    groupMap = L.map('groupMap', { center: [22, -75], zoom: 2, minZoom: 2, worldCopyJump: true, layers: [street], preferCanvas: true });
+    L.control.layers({ 'Calles': street, 'Sat&eacute;lite': satellite }, null, { collapsed: false }).addTo(groupMap);
+    groupTrackLayer = L.layerGroup().addTo(groupMap);
+    groupAnimationLayer = L.layerGroup().addTo(groupMap);
+  }
+
+  function filteredGroupPageSystems() {
+    const basin = document.getElementById('groupBasin').value;
+    const start = Number(document.getElementById('groupStart').value);
+    const month = Number(document.getElementById('groupMonth').value);
+    return fullSystems.filter(system => {
+      const genesisMonth = parseObservationDate(system.o[0][0]).getUTCMonth() + 1;
+      return (basin === 'ALL' || system.b === basin) && system.y >= start && (!month || genesisMonth === month);
+    });
+  }
+
+  async function openGroupPage() {
+    initializeGroupMap();
+    setTimeout(() => groupMap.invalidateSize(), 80);
+    try {
+      await loadFullData();
+      buildTrajectoryClusterModel();
+      document.getElementById('groupLoading').hidden = true;
+      document.getElementById('groupContent').hidden = false;
+      renderGroupPage();
+      setTimeout(() => groupMap.invalidateSize(), 80);
+    } catch (error) {
+      document.getElementById('groupLoading').textContent = error.message;
+    }
+  }
+
+  function renderGroupPage({ fit = false } = {}) {
+    if (!fullSystems || !groupMap) return;
+    clearInterval(groupAnimationTimer);
+    selectedGroupSystem = null;
+    groupAnimationIndex = 0;
+    groupAnimationLayer.clearLayers();
+    document.getElementById('groupPlayback').hidden = true;
+    const model = buildTrajectoryClusterModel();
+    const eligible = filteredGroupPageSystems().filter(system => model.assignmentById.has(system.i));
+    const groups = Array.from({ length: 6 }, (_, cluster) => eligible.filter(system => model.assignmentById.get(system.i) === cluster));
+    const visibleGroups = groupFocus === 'ALL' ? groups : groups.map((group, cluster) => cluster === Number(groupFocus) ? group : []);
+    const visible = visibleGroups.flat();
+    groupTrackLayer.clearLayers();
+    const sampleStep = Math.max(1, Math.ceil(visible.length / 850));
+    visible.forEach((system, index) => {
+      if (index % sampleStep) return;
+      const cluster = model.assignmentById.get(system.i);
+      splitTrack(system).forEach(part => L.polyline(part, {
+        color: corridorColors[cluster], weight: 1.35, opacity: groupFocus === 'ALL' ? .19 : .26,
+        interactive: false
+      }).addTo(groupTrackLayer));
+    });
+    visibleGroups.forEach((systems, cluster) => {
+      if (!systems.length) return;
+      const representative = systems.reduce((best, system) => {
+        const distance = squaredDistance(model.featureById.get(system.i), model.centers[cluster]);
+        return distance < best.distance ? { system, distance } : best;
+      }, { system: systems[0], distance: Infinity }).system;
+      splitTrack(representative).forEach(part => L.polyline(part, { color: corridorColors[cluster], weight: 6, opacity: 1 })
+        .bindPopup(`<b>Corredor ${cluster + 1}</b><br>${corridorDescription(systems)}<br>Ruta representativa: ${representative.n} · ${representative.y}`)
+        .addTo(groupTrackLayer));
+    });
+    const populated = groups.map((systems, cluster) => ({ systems, cluster })).filter(group => group.systems.length).sort((left, right) => left.cluster - right.cluster);
+    document.getElementById('groupCards').innerHTML = populated.map(({ systems, cluster }) => {
+      const share = eligible.length ? Math.round(systems.length * 100 / eligible.length) : 0;
+      const meanWind = Math.round(systems.reduce((sum, system) => sum + system.w, 0) / systems.length);
+      const selected = Number(groupFocus) === cluster;
+      return `<button type="button" class="groupCard" data-group-cluster="${cluster}" aria-selected="${selected}" style="--group-color:${corridorColors[cluster]}"><i></i><span><b>Corredor ${cluster + 1}</b><span>${corridorDescription(systems)}</span><span>${numberFormat.format(systems.length)} ciclones · ${share}% · ${meanWind} kt de viento máximo medio</span></span></button>`;
+    }).join('') || '<div class="emptyState">No hay trayectorias completas para este recorte.</div>';
+    document.querySelectorAll('[data-group-cluster]').forEach(button => button.addEventListener('click', () => {
+      groupFocus = Number(button.dataset.groupCluster);
+      renderGroupPage({ fit: true });
+    }));
+    const picker = document.getElementById('groupCyclonePicker');
+    if (groupFocus === 'ALL') {
+      picker.hidden = true;
+      document.getElementById('groupCycloneList').innerHTML = '';
+    } else {
+      picker.hidden = false;
+      const activeSystems = groups[Number(groupFocus)].slice().sort((left, right) => right.w - left.w || right.y - left.y);
+      document.getElementById('groupCycloneTitle').textContent = `Ciclones del Corredor ${Number(groupFocus) + 1}`;
+      document.getElementById('groupCycloneList').innerHTML = activeSystems.map(system => `<button type="button" class="groupCyclone" data-group-system="${system.i}" aria-selected="false"><span><b>${system.n} · ${system.y}</b><span>${categoryLabel(system.c)} · ${system.o.length} observaciones</span></span><strong>${system.w} kt</strong></button>`).join('') || '<div class="emptyState">No hay ciclones para este recorte.</div>';
+      document.querySelectorAll('[data-group-system]').forEach(button => button.addEventListener('click', () => {
+        selectGroupSystem(activeSystems.find(system => system.i === button.dataset.groupSystem));
+      }));
+    }
+    document.getElementById('groupColorLegend').innerHTML = populated.map(({ cluster }) => `<span><i style="background:${corridorColors[cluster]}"></i>Corredor ${cluster + 1}</span>`).join('');
+    const largest = populated.reduce((best, group) => !best || group.systems.length > best.systems.length ? group : best, null);
+    const meanVisibleWind = visible.length ? Math.round(visible.reduce((sum, system) => sum + system.w, 0) / visible.length) : 0;
+    document.getElementById('groupVisible').textContent = numberFormat.format(visible.length);
+    document.getElementById('groupLargest').textContent = largest ? `C${largest.cluster + 1} · ${Math.round(largest.systems.length * 100 / eligible.length)}%` : '—';
+    document.getElementById('groupWind').textContent = visible.length ? `${meanVisibleWind} kt` : '—';
+    document.getElementById('groupMapTitle').textContent = groupFocus === 'ALL' ? 'Los seis corredores históricos' : `Corredor ${Number(groupFocus) + 1} · ${corridorDescription(visible)}`;
+    document.getElementById('groupMapSub').textContent = groupFocus === 'ALL'
+      ? 'Cada color representa un patrón. Las líneas finas son ciclones reales y la gruesa es el caso más central del grupo.'
+      : `${numberFormat.format(visible.length)} ciclones del recorte siguen este patrón. Tocá “Mostrar los seis” para volver a compararlos.`;
+    if ((fit || groupFocus === 'ALL') && visible.length) {
+      const bounds = L.latLngBounds(visible.flatMap(system => splitTrack(system).flat()));
+      if (bounds.isValid()) groupMap.fitBounds(bounds, { padding: [34, 34], maxZoom: groupFocus === 'ALL' ? 3 : 5, animate: fit });
+    }
+  }
+
+  function selectGroupSystem(system) {
+    if (!system?.o?.length) return;
+    clearInterval(groupAnimationTimer);
+    selectedGroupSystem = system;
+    groupAnimationIndex = 0;
+    document.getElementById('groupPlayback').hidden = false;
+    document.querySelectorAll('[data-group-system]').forEach(button => button.setAttribute('aria-selected', String(button.dataset.groupSystem === system.i)));
+    const path = system.o.map(row => [row[2], row[1]]);
+    if (path.length > 1) groupMap.fitBounds(L.latLngBounds(path), { padding: [42, 42], maxZoom: 5, animate: true });
+    updateGroupAnimationFrame();
+    playGroupAnimation();
+  }
+
+  function updateGroupAnimationFrame() {
+    if (!selectedGroupSystem) return;
+    const observations = selectedGroupSystem.o;
+    groupAnimationLayer.clearLayers();
+    const fullPath = observations.map(row => [row[2], row[1]]);
+    L.polyline(fullPath, { color: '#fff8f2', weight: 3, opacity: .3, dashArray: '7 7' }).addTo(groupAnimationLayer);
+    for (let index = 1; index <= groupAnimationIndex; index += 1) {
+      const previous = observations[index - 1];
+      const current = observations[index];
+      L.polyline([[previous[2], previous[1]], [current[2], current[1]]], {
+        color: categoryColor((previous[3] + current[3]) / 2), weight: 6, opacity: .98, lineCap: 'round'
+      }).addTo(groupAnimationLayer);
+    }
+    const row = observations[groupAnimationIndex];
+    L.circleMarker([row[2], row[1]], {
+      radius: Math.max(6, Math.min(14, 4 + row[3] / 18)), color: '#fff', weight: 2,
+      fillColor: categoryColor(row[3]), fillOpacity: 1
+    }).addTo(groupAnimationLayer);
+    const date = parseObservationDate(row[0]);
+    document.getElementById('groupPlaybackStatus').innerHTML = `<b style="color:${categoryColor(row[3])}">${selectedGroupSystem.n} · ${selectedGroupSystem.y}</b><br>${dateFormat.format(date)} · ${statusLabels[row[5]] || row[5]} · ${row[3]} kt${row[4] ? ` · ${row[4]} hPa` : ''}`;
+  }
+
+  function playGroupAnimation() {
+    if (!selectedGroupSystem) return;
+    clearInterval(groupAnimationTimer);
+    if (groupAnimationIndex >= selectedGroupSystem.o.length - 1) groupAnimationIndex = 0;
+    updateGroupAnimationFrame();
+    groupAnimationTimer = setInterval(() => {
+      groupAnimationIndex += 1;
+      updateGroupAnimationFrame();
+      if (groupAnimationIndex >= selectedGroupSystem.o.length - 1) clearInterval(groupAnimationTimer);
+    }, 125);
   }
 
   function initializeStrongestMap() {
@@ -658,6 +1061,37 @@
 
   document.body.dataset.appPage = 'home';
   document.querySelectorAll('[data-app-target]').forEach(button => button.addEventListener('click', () => setAppPage(button.dataset.appTarget)));
+  document.getElementById('layer').addEventListener('change', () => {
+    const corridorMode = document.getElementById('layer').value === 'clusters';
+    setCorridorMode(corridorMode);
+    if (corridorMode) {
+      corridorFocus = 'ALL';
+      renderTrajectoryCorridors();
+    }
+  });
+  ['v3basin', 'v3start', 'month'].forEach(id => document.getElementById(id).addEventListener('change', () => {
+    if (document.getElementById('layer').value === 'clusters') renderTrajectoryCorridors();
+  }));
+  document.getElementById('showAllCorridors').addEventListener('click', () => {
+    corridorFocus = 'ALL';
+    renderTrajectoryCorridors({ fitFocus: true });
+  });
+  ['groupBasin', 'groupStart', 'groupMonth'].forEach(id => document.getElementById(id).addEventListener('change', () => {
+    groupFocus = 'ALL';
+    renderGroupPage({ fit: true });
+  }));
+  document.getElementById('showAllGroups').addEventListener('click', () => {
+    groupFocus = 'ALL';
+    renderGroupPage({ fit: true });
+  });
+  document.getElementById('playGroupStorm').addEventListener('click', playGroupAnimation);
+  document.getElementById('pauseGroupStorm').addEventListener('click', () => clearInterval(groupAnimationTimer));
+  document.getElementById('restartGroupStorm').addEventListener('click', () => {
+    if (!selectedGroupSystem) return;
+    groupAnimationIndex = 0;
+    updateGroupAnimationFrame();
+    playGroupAnimation();
+  });
   ['strongMetric', 'strongBasin', 'strongCategory'].forEach(id => document.getElementById(id).addEventListener('change', renderStrongRanking));
   document.getElementById('playStorm').addEventListener('click', playAnimation);
   document.getElementById('pauseStorm').addEventListener('click', () => clearInterval(animationTimer));

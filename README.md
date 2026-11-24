@@ -7,8 +7,9 @@ Informe web estático sobre la estacionalidad, distribución espacial, trayector
 - Alcance metodológico y advertencias de interpretación.
 - Filtros por cuenca, año inicial y mes de génesis.
 - Mapa mundial con OpenStreetMap y Esri World Imagery.
-- Sidebar con tres vistas: mapa general, ciclones más fuertes y amenaza por ubicación.
+- Sidebar con cuatro vistas: mapa general, ciclones más fuertes, grupos de trayectorias y amenaza por ubicación.
 - Puntos de génesis, picos de intensidad y génesis de sistemas con intensificación rápida (RI).
+- Capa y página de corredores históricos que agrupa automáticamente las trayectorias en seis patrones, permite aislar cada grupo, destaca un recorrido real representativo y reproduce los ciclones pertenecientes al corredor seleccionado.
 - Ranking filtrable por viento, presión, ACE, distancia, velocidad media y aumento de viento en 24 horas.
 - Animación completa de cada ciclón con fecha, estado, viento, presión, velocidad de desplazamiento y recorrido coloreado por intensidad.
 - Calendario mensual y tabla mensual.
@@ -36,6 +37,7 @@ Fuente: NOAA/National Hurricane Center, HURDAT2.
 - Distancias y desplazamientos: estimación haversine.
 - Duración y velocidad aproximadas: se calculan con la fecha y hora de cada observación.
 - Índice de anomalía: trayectorias resampleadas a 13 posiciones, alineadas por el primer avance y normalizadas por longitud. El puntaje compara la forma con una referencia global de las trayectorias disponibles; no mide rareza climatológica, intensidad ni riesgo.
+- Corredores de trayectoria: cada recorrido se interpola en siete momentos equivalentes y se agrupa por proximidad geográfica mediante k-means; las categorías describen patrones de esta base y no son una clasificación oficial de ciclones.
 
 Las frecuencias históricas deben interpretarse con cautela porque la calidad y resolución observacional varían. El perfil por ubicación describe amenaza histórica, no vulnerabilidad, riesgo total ni pronóstico. En ese perfil, el viento se interpola sobre el segmento de trayectoria más cercano al punto elegido.
 
