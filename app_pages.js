@@ -401,14 +401,10 @@
 
   function initializeGroupMap() {
     if (groupMap) return;
-    const street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
-    });
     const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 18, attribution: 'Tiles &copy; Esri'
     });
-    groupMap = L.map('groupMap', { center: [22, -75], zoom: 2, minZoom: 2, worldCopyJump: true, layers: [street], preferCanvas: true });
-    L.control.layers({ 'Calles': street, 'Sat&eacute;lite': satellite }, null, { collapsed: false }).addTo(groupMap);
+    groupMap = L.map('groupMap', { center: [22, -75], zoom: 2, minZoom: 2, worldCopyJump: true, layers: [satellite], preferCanvas: true });
     groupTrackLayer = L.layerGroup().addTo(groupMap);
     groupAnimationLayer = L.layerGroup().addTo(groupMap);
   }
@@ -559,14 +555,10 @@
 
   function initializeStrongestMap() {
     if (strongestMap) return;
-    const street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
-    });
     const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 18, attribution: 'Tiles &copy; Esri'
     });
-    strongestMap = L.map('strongMap', { center: [20, -80], zoom: 3, minZoom: 2, worldCopyJump: true, layers: [street] });
-    L.control.layers({ 'Calles': street, 'Sat&eacute;lite': satellite }, null, { collapsed: false }).addTo(strongestMap);
+    strongestMap = L.map('strongMap', { center: [20, -80], zoom: 3, minZoom: 2, worldCopyJump: true, layers: [satellite] });
     strongestTrack = L.polyline([], { color: '#8062d6', weight: 3, opacity: .42 }).addTo(strongestMap);
     strongestProgress = L.layerGroup().addTo(strongestMap);
   }
@@ -703,10 +695,8 @@
 
   function initializeThreatMap() {
     if (threatMap) return;
-    const street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' });
     const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, attribution: 'Tiles &copy; Esri' });
-    threatMap = L.map('threatMap', { center: [25.7617, -80.1918], zoom: 4, minZoom: 3, worldCopyJump: true, layers: [street] });
-    L.control.layers({ 'Calles': street, 'Sat&eacute;lite': satellite }, null, { collapsed: false }).addTo(threatMap);
+    threatMap = L.map('threatMap', { center: [25.7617, -80.1918], zoom: 4, minZoom: 3, worldCopyJump: true, layers: [satellite] });
     threatLocationLayer = L.layerGroup().addTo(threatMap);
     threatTrackLayer = L.layerGroup().addTo(threatMap);
     threatMap.on('click', event => {
@@ -1060,6 +1050,23 @@
   }
 
   document.body.dataset.appPage = 'home';
+  const sourceNote = document.querySelector('.source');
+  if (sourceNote) sourceNote.textContent = sourceNote.textContent.replace('Cartografía: OpenStreetMap y Esri World Imagery.', 'Cartografía: Esri World Imagery.');
+  document.querySelector('.appSidebar').id = 'appSidebar';
+  const sidebarToggle = document.createElement('button');
+  sidebarToggle.type = 'button';
+  sidebarToggle.className = 'sidebarToggle';
+  sidebarToggle.id = 'sidebarToggle';
+  sidebarToggle.setAttribute('aria-controls', 'appSidebar');
+  sidebarToggle.setAttribute('aria-expanded', 'true');
+  sidebarToggle.title = 'Mostrar u ocultar navegación';
+  sidebarToggle.innerHTML = '☰ <span>Menú</span>';
+  document.body.prepend(sidebarToggle);
+  sidebarToggle.addEventListener('click', () => {
+    const collapsed = document.body.classList.toggle('sidebar-collapsed');
+    sidebarToggle.setAttribute('aria-expanded', String(!collapsed));
+    sidebarToggle.querySelector('span').textContent = collapsed ? 'Abrir menú' : 'Menú';
+  });
   document.querySelectorAll('[data-app-target]').forEach(button => button.addEventListener('click', () => setAppPage(button.dataset.appTarget)));
   document.getElementById('layer').addEventListener('change', () => {
     const corridorMode = document.getElementById('layer').value === 'clusters';
